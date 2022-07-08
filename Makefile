@@ -1,3 +1,5 @@
+include .envrc
+
 help:
 	@LC_ALL=C $(MAKE) -pRrq -f $(lastword $(MAKEFILE_LIST)) : 2>/dev/null | awk -v RS= -F: '/^# File/,/^# Finished Make data base/ {if ($$1 !~ "^[#.]") {print $$1}}' | sort | egrep -v -e '^[^[:alnum:]]' -e '^$@$$'
 
@@ -5,7 +7,7 @@ confirm:
 	@echo -n 'Are you sure? [y/N] ' && read ans && [ $${ans:-N} = y ]
 
 run/api:
-	go run ./cmd/api
+	go run ./cmd/api -db-dsn=${GREENLIGHT_DB_DSN}
 
 db/psql:
 	psql ${GREENLIGHT_DB_DSN}
