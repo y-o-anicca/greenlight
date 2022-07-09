@@ -103,3 +103,9 @@ production/deploy/api:
 production/configure/api.service:
 	rsync -P ./remote/production/api.service greenlight@${PRODUCTION_HOST_IP}:~ 
 	ssh -t greenlight@${PRODUCTION_HOST_IP} 'sudo mv ~/api.service /etc/systemd/system/ && sudo systemctl enable api && sudo systemctl restart api'
+
+## production/configure/caddyfile: configure the production Caddyfile
+.PHONY: production/configure/caddyfile 
+production/configure/caddyfile:
+	rsync -P ./remote/production/Caddyfile greenlight@${PRODUCTION_HOST_IP}:~ 
+	ssh -t greenlight@${PRODUCTION_HOST_IP} 'sudo mv ~/Caddyfile /etc/caddy/ && sudo systemctl reload caddy'
