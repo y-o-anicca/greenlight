@@ -18,9 +18,10 @@ import (
 	"greenlight.yukiya.net/internal/mailer"
 )
 
-const version = "1.0.0"
-
-var buildTime string
+var (
+	buildTime string
+	version   string
+)
 
 type config struct {
 	port int
