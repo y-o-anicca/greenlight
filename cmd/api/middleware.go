@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/felixge/httpsnoop"
+	"github.com/pascaldekloe/jwt"
 	"github.com/tomasen/realip"
 	"golang.org/x/time/rate"
 	"greenlight.yukiya.net/internal/data"
-	"greenlight.yukiya.net/internal/validator"
 )
 
 func (app *application) recoverPanic(next http.Handler) http.Handler {
@@ -109,18 +109,38 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 		}
 		// Extract the actual authentication token from the header parts.
 		token := headerParts[1]
-		// Validate the token to make sure it is in a sensible format.
-		v := validator.New()
-		// If the token isn't valid, use the invalidAuthenticationTokenResponse()
-		// helper to send a response, rather than the failedValidationResponse() helper // that we'd normally use.
-		if data.ValidateTokenPlaintext(v, token); !v.Valid() {
+
+		// Parse the JWT and extract the claims. This will return an error if the JWT
+		// contents doesn't match the signature (i.e. the token has been tampered with) or the algorithm isn't valid.
+		claims, err := jwt.HMACCheck([]byte(token), []byte(app.config.jwt.secret))
+		if err != nil {
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
-		// Retrieve the details of the user associated with the authentication token, // again calling the invalidAuthenticationTokenResponse() helper if no
-		// matching record was found. IMPORTANT: Notice that we are using
-		// ScopeAuthentication as the first parameter here.
-		user, err := app.models.Users.GetForToken(data.ScopeAuthentication, token)
+		// Check if the JWT is still valid at this moment in time.
+		if !claims.Valid(time.Now()) {
+			app.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
+		// Check that the issuer is our application.
+		if claims.Issuer != "greenlight.yukiyaogasa.net" {
+			app.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
+		// Check that our application is in the expected audiences for the JWT.
+		if !claims.AcceptAudience("greenlight.yukiyaogasa.net") {
+			app.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
+		// At this point, we know that the JWT is all OK and we can trust the data in
+		// it. We extract the user ID from the claims subject and convert it from a string into an int64.
+		userID, err := strconv.ParseInt(claims.Subject, 10, 64)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
+		// Lookup the user record from the database.
+		user, err := app.models.Users.Get(userID)
 		if err != nil {
 			switch {
 			case errors.Is(err, data.ErrRecordNotFound):
@@ -130,6 +150,34 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 			}
 			return
 		}
+
+		// ====================================================================================
+		// Stateful Token
+		// ====================================================================================
+		// // Validate the token to make sure it is in a sensible format.
+		// v := validator.New()
+		// // If the token isn't valid, use the invalidAuthenticationTokenResponse()
+		// // helper to send a response, rather than the failedValidationResponse() helper // that we'd normally use.
+		// if data.ValidateTokenPlaintext(v, token); !v.Valid() {
+		// 	app.invalidAuthenticationTokenResponse(w, r)
+		// 	return
+		// }
+		// // Retrieve the details of the user associated with the authentication token, // again calling the invalidAuthenticationTokenResponse() helper if no
+		// // matching record was found. IMPORTANT: Notice that we are using
+		// // ScopeAuthentication as the first parameter here.
+		// user, err := app.models.Users.GetForToken(data.ScopeAuthentication, token)
+		// if err != nil {
+		// 	switch {
+		// 	case errors.Is(err, data.ErrRecordNotFound):
+		// 		app.invalidAuthenticationTokenResponse(w, r)
+		// 	default:
+		// 		app.serverErrorResponse(w, r, err)
+		// 	}
+		// 	return
+		// }
+		// ====================================================================================
+		// ====================================================================================
+
 		// Call the contextSetUser() helper to add the user information to the request // context.
 		r = app.contextSetUser(r, user)
 		// Call the next handler in the chain.

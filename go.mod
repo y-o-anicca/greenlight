@@ -11,6 +11,8 @@ require (
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
 )
 
+require github.com/pascaldekloe/jwt v1.10.0 // indirect
+
 require (
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
